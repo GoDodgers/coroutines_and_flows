@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -54,12 +55,12 @@ class MainActivity : ComponentActivity() {
                         lateinit var pokemonList: Map<String, JsonElement>
 
                         try {
-                            fun jsonString(_json: String): Map<String, JsonElement> {
+                            fun jsonStringToMap(_json: String): Map<String, JsonElement> {
                                 val json = Json.parseToJsonElement(_json)
                                 require(json is JsonObject) { "Only JSON Objects can be converted to a Map!" }
                                 return json
                             }
-                            pokemonList = jsonString(data)
+                            pokemonList = jsonStringToMap(data)
 
                         } catch (err: Exception) {
                             err.printStackTrace()
@@ -96,6 +97,7 @@ class MainActivity : ComponentActivity() {
                                                 }
                                             }
                                         }
+                                        Spacer(modifier = Modifier.height(8.dp))
                                     }
                                 }
                             } catch (err: Exception) {
