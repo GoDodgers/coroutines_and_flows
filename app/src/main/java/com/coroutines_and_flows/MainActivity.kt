@@ -8,8 +8,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -47,19 +50,16 @@ class MainActivity : ComponentActivity() {
             Coroutines_and_flowsTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box (modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        val pp = Json { // this returns the JsonBuilder
-                            prettyPrint = true
-                        }
                         val data = main()
                         lateinit var pokemonList: Map<String, JsonElement>
 
                         try {
-                            fun jsonStringToMapWithKotlinx(_json: String): Map<String, JsonElement> {
+                            fun jsonString(_json: String): Map<String, JsonElement> {
                                 val json = Json.parseToJsonElement(_json)
                                 require(json is JsonObject) { "Only JSON Objects can be converted to a Map!" }
                                 return json
                             }
-                            pokemonList = jsonStringToMapWithKotlinx(data)
+                            pokemonList = jsonString(data)
 
                         } catch (err: Exception) {
                             err.printStackTrace()
@@ -73,6 +73,7 @@ class MainActivity : ComponentActivity() {
 
                             try {
                                 var result = pokemonList["results"]?.jsonArray?.asIterable()
+
                                 if (result != null) {
                                     result = result.toList()
                                     items(result.size) { i ->
@@ -87,16 +88,18 @@ class MainActivity : ComponentActivity() {
                                                 ),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Text(text = AnnotatedString(result[i].toString()))
+                                            Box(modifier = Modifier.padding(16.dp)) {
+                                                Row (
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Text(text = AnnotatedString(result[i].toString()))
+                                                }
+                                            }
                                         }
                                     }
                                 }
                             } catch (err: Exception) {
                                 err.printStackTrace()
-                            }
-
-                            item {
-                                Text(text = "Foobar")
                             }
                         }
                     }
