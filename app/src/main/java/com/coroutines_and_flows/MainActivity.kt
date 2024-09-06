@@ -1,5 +1,6 @@
 package com.coroutines_and_flows
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -20,14 +21,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.coroutines_and_flows.ui.theme.Coroutines_and_flowsTheme
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.decodeFromString
@@ -41,9 +51,17 @@ import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
+import kotlin.concurrent.thread
+
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
+
+var logg: Logger = LoggerFactory.getLogger("coroutines_and_flows")
 
 
 class MainActivity : ComponentActivity() {
+    @SuppressLint("CoroutineCreationDuringComposition")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -51,58 +69,13 @@ class MainActivity : ComponentActivity() {
             Coroutines_and_flowsTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box (modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        val data = main()
-                        lateinit var pokemonList: Map<String, JsonElement>
 
-                        try {
-                            fun jsonStringToMap(_json: String): Map<String, JsonElement> {
-                                val json = Json.parseToJsonElement(_json)
-                                require(json is JsonObject) { "Only JSON Objects can be converted to a Map!" }
-                                return json
-                            }
-                            pokemonList = jsonStringToMap(data)
+                        Text("foobar")
+                        var scope = rememberCoroutineScope()
 
-                        } catch (err: Exception) {
-                            err.printStackTrace()
-                        }
-
-                        LazyColumn (
-                            modifier = Modifier
-                                .fillMaxSize(),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-
-                            try {
-                                var result = pokemonList["results"]?.jsonArray?.asIterable()
-
-                                if (result != null) {
-                                    result = result.toList()
-                                    items(result.size) { i ->
-                                        Box(
-                                            modifier = Modifier
-                                                .height(300.dp)
-                                                .width(300.dp)
-                                                .border(
-                                                    4.dp,
-                                                    color = Color.Black,
-                                                    shape = RoundedCornerShape(25.dp)
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Box(modifier = Modifier.padding(16.dp)) {
-                                                Row (
-                                                    modifier = Modifier.fillMaxWidth()
-                                                ) {
-                                                    Text(text = AnnotatedString(result[i].toString()))
-                                                }
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                    }
-                                }
-                            } catch (err: Exception) {
-                                err.printStackTrace()
-                            }
+                        scope.launch {
+                            var foo: Deferred<String> = async {  doWork() }
+                            println(foo.await())
                         }
                     }
                 }
@@ -111,41 +84,114 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-suspend fun doWork(): String {
-    val _url: String = "https://pokeapi.co/api/v2/pokemon?limit=151"
-    var response: StringBuilder = StringBuilder()
+suspend fun doSomething(): String {
+    // continuation - data structure
+    delay(5000L) // suspends / blocks
+    // continuation restored
+    return "something"
+}
 
-    try {
-        withContext(Dispatchers.IO) {
-            val url: URL = URI.create(_url).toURL()
-            val connection: HttpURLConnection = url.openConnection() as HttpURLConnection
+// structured concurrency
+suspend fun doSomethingElse(): String {
+    delay(5000L)
+    return "something else"
+}
 
-            connection.requestMethod = "GET"
-            val responseCode: Int = connection.responseCode
+suspend fun doEverythingElse(): String {
+    delay(4000L)
+    return "everything else"
+}
 
-            println("response code :: ${ responseCode }")
-
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                val reader: BufferedReader = BufferedReader(InputStreamReader(connection.inputStream))
-                var line: String?
-
-                while (reader.readLine().also { line = it } != null) {
-                    response.append(line)
-                }
-
-                reader.close()
-            }
-        }
-        println("response : ${ response }")
-
-    } catch (err: Exception) {
-        err.printStackTrace()
+suspend fun doSequentially(): String {
+    // starts context for coroutines
+    // parent
+    coroutineScope {
+        // child
+        doSomething()
+        // isolated from other coroutineScopes
+        // parrallel code needs to finish before scope is closed
     }
 
-    return response.toString()
+    coroutineScope {
+        doSomethingElse()
+        // parrallel code needs to finish before scope is closed
+    }
+    return "foobar"
 }
 
-@Composable
-fun main(): String = runBlocking {
-    return@runBlocking doWork()
+suspend fun doConcurrently() {
+    // parent
+    coroutineScope {
+        // child
+        launch {
+            doSomething()
+        }
+        // launch a new coroutie that will run in parrallel  new Thread(() -> ...)
+        launch {
+            doSomethingElse()
+        }
+    }
 }
+
+// No Parent
+ suspend fun doUnStructuredConcurrency() {
+     // Main ( global scope ) thread needs to have enough time to complete
+     GlobalScope.launch {
+         doSomething()
+     }
+     GlobalScope.launch {
+         doSomethingElse()
+     }
+ }
+
+// (doSomething, doSomethingElse) => { something after both are done }
+suspend fun doSequentiallyThenConcurrently() {
+    coroutineScope {
+        var job1: Job = launch { doSomething() }
+        var job2: Job = launch { doSomethingElse() }
+        job1.join()
+        job2.join()
+        launch {
+            doEverythingElse()
+        }
+    }
+}
+
+suspend fun doSequentiallyThenConcurrentlyAlt() {
+    coroutineScope {
+        coroutineScope {
+            launch { doSomething() }
+            launch { doSomethingElse() }
+        }
+        // CoroutineName ( name coroutine ) + Dispatchers == coroutine context
+        launch (CoroutineName("foobar") + Dispatchers.Default) {
+            doSomethingElse()
+        }
+    }
+}
+
+suspend fun doEverything(): String {
+    coroutineScope {
+        // deffered ( analogous to Future type )
+        var foo = async { doSomething() }
+        var bar = async { doSomethingElse() }
+        // semantic blocking
+        println("foo.await():: ${foo.await()}")
+        println("bar.await():: ${bar.await()}")
+    }
+    return ""
+}
+
+suspend fun doWork(): String {
+//    return@runBlocking doWork()
+    try {
+        logg.debug("logg foobar :: doWork() :: before doEverything()")
+    } catch (err: Exception) {
+        println(err)
+        println("println foobar :: doWork() :: inside catch")
+    }
+    println("println foobar :: doWork() :: before doEverything()")
+    return doEverything()
+}
+
+
