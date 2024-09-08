@@ -56,13 +56,14 @@ import kotlin.concurrent.thread
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-
 var logg: Logger = LoggerFactory.getLogger("coroutines_and_flows")
 
 
 class MainActivity : ComponentActivity() {
     @SuppressLint("CoroutineCreationDuringComposition")
     override fun onCreate(savedInstanceState: Bundle?) {
+
+        logg.debug("logg foobar :: doWork() :: main activity")
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
@@ -188,10 +189,107 @@ suspend fun doWork(): String {
         logg.debug("logg foobar :: doWork() :: before doEverything()")
     } catch (err: Exception) {
         println(err)
-        println("println foobar :: doWork() :: inside catch")
+        println("println foobar doWork() :: inside catch")
     }
     println("println foobar :: doWork() :: before doEverything()")
     return doEverything()
 }
 
+/**
+ * Basically, there are 3 variables you need to consider:
+ *  1. What's your current execution environment? Synchronous (i.e., regular code) or async (a suspend function)
+ *  2. What code are you trying to run? Synchronous or async
+ *  3. Do you want that code to run synchronously (wait until it completes) or async
+ *
+ * That's 2 * 2 * 2, or 8 possibilities. I've given you examples in all 8
+ */
 
+/**
+ * A sample synchronous function
+ */
+fun syncHello() {
+    println("Sync Hello")
+}
+
+/**
+ * A sample asynchronous function
+ */
+suspend fun asyncHello() = coroutineScope {
+    println("Async Hello")
+}
+
+/****** In "sync" code ******/
+
+fun syncHaveSyncCodeWantSyncExecution() {
+    // Just do a normal function call
+    syncHello()
+}
+
+fun syncHaveSyncCodeWantAsyncExecution() {
+    // Get (or create) a scope and launch for fire-and-forget
+    val scope = CoroutineScope(Dispatchers.Default)
+    scope.launch {
+        syncHello()
+    }
+    // Use `async` method if you want to track or cancel the execution
+    val d = scope.async {
+        syncHello()
+    }
+    d.cancel()
+}
+
+fun syncHaveAsyncCodeWantSyncExecution() {
+    // Use runBlocking to execute async code synchronously
+    runBlocking {
+        asyncHello()
+    }
+}
+
+fun syncHaveAsyncCodeWantAsyncExecution() {
+    val scope = CoroutineScope(Dispatchers.Default)
+    scope.launch {
+        asyncHello()
+    }
+    val d = scope.async {
+        syncHello()
+    }
+    d.cancel()
+}
+
+/****** In "async" code ******/
+suspend fun asyncHaveSyncCodeWantSyncExecution() {
+    // Just "normal" function call
+    syncHello()
+}
+
+suspend fun asyncHaveSyncCodeWantAsyncExecution() {
+    // Can reuse existing coroutine scope to run sync code
+    coroutineScope {
+        syncHello()
+    }
+
+    // Synchronous code can't be cancelled so you can try putting expensive computation
+    // on a separate thread using the Dispatchers.Default context
+    withContext(Dispatchers.Default) {
+        syncHello()
+    }
+}
+
+suspend fun asyncHaveAsyncCodeWantSyncExecution() {
+    // Just "normal" function call
+    asyncHello()
+}
+
+suspend fun asyncHaveAsyncCodeWantAsyncExecution() {
+    // Can reuse existing coroutine scope to run async code
+    coroutineScope {
+        asyncHello()
+    }
+
+    // Create a new coroutine context if you want to handle the cancellation of the
+    // jobs separately
+    val fiveSecondMaxScope = CoroutineScope(Dispatchers.IO)
+    fiveSecondMaxScope.launch { syncHello() }
+    delay(5000)
+    fiveSecondMaxScope.cancel("Time's up", CancellationException())
+}
